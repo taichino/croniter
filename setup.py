@@ -36,5 +36,6 @@ if __name__ == '__main__':
                         "License :: OSI Approved :: MIT License",
                         "Operating System :: POSIX",
                         "Programming Language :: Python",
-                        "Topic :: Software Development :: Libraries :: Python Modules"]
+                        "Topic :: Software Development :: Libraries :: Python Modules"],
+    install_requires = ['python-dateutil']
     )
