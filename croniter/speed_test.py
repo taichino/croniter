@@ -3,7 +3,7 @@
 
 import time
 from datetime import datetime, date
-from croniter import croniter
+from .croniter import croniter
 
 class timerTest(object):
     def __init__(self):
@@ -210,4 +210,4 @@ class CroniterTest(timerTest):
 if __name__ == '__main__':
     from timeit import Timer
     t = Timer('c=CroniterTest();c.run()', 'from __main__ import CroniterTest')
-    print t.timeit(200)
+    print(t.timeit(200))
