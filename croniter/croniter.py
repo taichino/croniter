@@ -90,8 +90,7 @@ class croniter(object):
                         raise ValueError("[%s] is not acceptable" %expr_format)
 
                     low, high, step = map(int, [low, high, step])
-                    for j in range(low, high+1, step):
-                        e_list.append(j)                        
+                    e_list += range(low, high+1, step)
                 else:
                     if not star_or_int_re.search(t):
                         t = self.ALPHACONV[i][t.lower()]
@@ -247,7 +246,7 @@ class croniter(object):
                 if expanded[5][0] != '*':
                     diff_sec = nearest_diff_method(d.second, expanded[5], 60)
                     if diff_sec != None and diff_sec != 0:
-                        dst += relativedelta(seconds = diff_sec)
+                        d += relativedelta(seconds = diff_sec)
                         return True, d
             else:
                 d += relativedelta(second = 0)
