@@ -17,7 +17,7 @@ setup(
     author_email     = 'taichino@gmail.com',
     url              = 'http://github.com/taichino/croniter',
     keywords         = 'datetime, iterator, cron',
-    install_requires = ["python-dateutil", "setuptools",],
+    install_requires = ["python-dateutil"],
     license          = __license__,
     classifiers      = ["Development Status :: 4 - Beta",
                         "Intended Audience :: Developers",
