@@ -5,14 +5,19 @@ from __future__ import absolute_import, print_function
 from datetime import datetime
 from croniter import croniter
 
+from croniter.tests import base
+
+
 class timerTest(object):
     def __init__(self):
-        self.tests = tuple(getattr(self, m) for m in dir(self) if m.lower().startswith('test'))
+        self.tests = tuple(getattr(self, m)
+                           for m in dir(self)
+                           if m.lower().startswith('test'))
 
     def run(self):
         for test in self.tests:
             test()
-                
+
 
 class CroniterTest(timerTest):
     def testMinute(self):
@@ -25,7 +30,7 @@ class CroniterTest(timerTest):
         base.day == n1.day
         base.hour == n1.hour
         base.minute == n1.minute - 1
-        for i in range(39): # ~ 58
+        for i in range(39):  # ~ 58
             itr.get_next()
 
         n2 = itr.get_next(datetime)
@@ -142,7 +147,6 @@ class CroniterTest(timerTest):
         n4.month == 1
         n4.year == 2011
 
-
     def testPrevMinute(self):
         base = datetime(2010, 8, 25, 15, 56)
         itr = croniter('*/1 * * * *', base)
@@ -151,7 +155,7 @@ class CroniterTest(timerTest):
         base.month == prev.month
         base.day == prev.day
         base.hour == prev.hour
-        base.minute, prev.minute+1
+        base.minute, prev.minute + 1
 
         base = datetime(2010, 8, 25, 15, 0)
         itr = croniter('*/1 * * * *', base)
@@ -159,7 +163,7 @@ class CroniterTest(timerTest):
         base.year == prev.year
         base.month == prev.month
         base.day == prev.day
-        base.hour == prev.hour+1
+        base.hour == prev.hour + 1
         59 == prev.minute
 
         base = datetime(2010, 8, 25, 0, 0)
@@ -167,7 +171,7 @@ class CroniterTest(timerTest):
         prev = itr.get_prev(datetime)
         base.year == prev.year
         base.month == prev.month
-        base.day == prev.day+1
+        base.day == prev.day + 1
         23 == prev.hour
         59 == prev.minute
 
@@ -199,14 +203,22 @@ class CroniterTest(timerTest):
         base = datetime(2010, 2, 25)
         itr = croniter('0 0 * * 7', base)
         n1 = itr.get_next(datetime)
-        n1.isoweekday() ==  7
+        n1.isoweekday() == 7
         n1.day == 28
 
         n2 = itr.get_next(datetime)
         n2.isoweekday() == 7
         n2.day == 7
-        n2.month == 3        
-        
+        n2.month == 3
+
+
+class TestCase(base.TestCase):
+    """make zope.testrunner happy"""
+
+    def test_Noop(self):
+        self.assertEqual(1, 1)
+
+
 if __name__ == '__main__':
     from timeit import Timer
     t = Timer('c=CroniterTest();c.run()', 'from __main__ import CroniterTest')

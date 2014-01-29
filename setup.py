@@ -1,28 +1,51 @@
 # -*- coding: utf-8 -*-
-from setuptools import setup
+import os
+from setuptools import setup, find_packages
 
-__version__, __doc__, __license__, __author__ = None, None, None, None
-# get __version__, __doc__, __license__, __author__
 
-exec(open("croniter/_release.py").read())
+def read(*rnames):
+    return open(
+        os.path.join('.', *rnames)
+    ).read()
+
+long_description = "\n\n".join(
+    [
+        read('README.rst'),
+        read('docs', 'CHANGES.rst'),
+    ]
+)
 
 setup(
-    packages         = ('croniter',),
-    name             = 'croniter',
-    version          = __version__,
-    py_modules       = ['croniter', 'croniter_test'],
-    description      = 'croniter provides iteration for datetime object with cron like format',
-    long_description = __doc__,
-    author           = __author__,
-    author_email     = 'taichino@gmail.com',
-    url              = 'http://github.com/taichino/croniter',
-    keywords         = 'datetime, iterator, cron',
-    install_requires = ["python-dateutil", "setuptools",],
-    license          = __license__,
-    classifiers      = ["Development Status :: 4 - Beta",
-                        "Intended Audience :: Developers",
-                        "License :: OSI Approved :: MIT License",
-                        "Operating System :: POSIX",
-                        "Programming Language :: Python",
-                        "Topic :: Software Development :: Libraries :: Python Modules"]
+    name='croniter',
+    version='0.3.5.dev0',
+    py_modules=['croniter', ],
+    description=(
+        'croniter provides iteration for datetime '
+        'object with cron like format'
+    ),
+    long_description=long_description,
+    author="Matsumoto Taichi, kiorky",
+    author_email='taichino@gmail.com, kiorky@cryptelium.net',
+    url='http://github.com/kiorky/croniter',
+    keywords='datetime, iterator, cron',
+    install_requires=[
+        "python-dateutil",
+        "setuptools",
+    ],
+    license="MIT License",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX",
+        "Programming Language :: Python",
+        "Topic :: Software Development :: Libraries :: Python Modules"],
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
+    include_package_data=True,
+    extras_require={
+        'test': [
+            "pytz",
+        ],
+    },
 )
