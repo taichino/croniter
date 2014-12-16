@@ -30,7 +30,6 @@ setup(
     keywords='datetime, iterator, cron',
     install_requires=[
         "python-dateutil",
-        "setuptools",
     ],
     license="MIT License",
     classifiers=[
