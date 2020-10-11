@@ -40,6 +40,72 @@ class CroniterNotAlphaError(CroniterBadCronError):
     pass
 
 
+def zerodate(d):
+    return d.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def timedelta_to_seconds(td):
+    """
+    Converts a 'datetime.timedelta' object `td` into seconds contained in
+    the duration.
+    Note: We cannot use `timedelta.total_seconds()` because this is not
+    supported by Python 2.6.
+    """
+    return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) \
+        / 10**6
+
+
+def datetime_to_timestamp(d):
+    """
+    Converts a `datetime` object `d` into a UNIX timestamp.
+    """
+    if d.tzinfo is not None:
+        d = d.replace(tzinfo=None) - d.utcoffset()
+    return timedelta_to_seconds(d - datetime.datetime(1970, 1, 1))
+
+
+def timestamp_to_datetime(timestamp, tzinfo=None):
+    """
+    Converts a UNIX timestamp `timestamp` into a `datetime` object.
+    """
+    result = datetime.datetime.utcfromtimestamp(timestamp)
+    if tzinfo:
+        result = result.replace(tzinfo=tzutc()).astimezone(tzinfo)
+    return result
+
+
+def get_next_dst_window(dt1, dt2=None):
+    '''
+    Return the lower, upper bound of the first DST transition between
+    the two dates, and if it is the summer, or winter one.
+    '''
+    if dt2 is None:
+        dt2 = dt1 + relativedelta(days=3)
+    minh = min(zerodate(dt1), zerodate(dt2))
+    minhdst = timedelta_to_seconds(minh.utcoffset())
+    is_summer = True
+    window = None, None, is_summer
+    for hour in range(
+        int(
+            round(
+                croniter._timedelta_to_seconds(abs(dt1 - dt2)) / 60)
+        )
+    ):
+        curh = minh + relativedelta(hours=hour)
+        upb = timestamp_to_datetime(datetime_to_timestamp(curh), tzinfo=curh.tzinfo)
+        coffset = timedelta_to_seconds(upb.utcoffset())
+        if coffset != minhdst:
+            ilowb = upb - relativedelta(hours=1)
+            lowb = timestamp_to_datetime(datetime_to_timestamp(ilowb), tzinfo=curh.tzinfo)
+            lowboffset = timedelta_to_seconds(lowb.utcoffset())
+            # impossible to happen for now
+            if upb is None:
+                raise CroniterError('DST window error')
+            window = lowb, upb, coffset > lowboffset
+            break
+    return window
+
+
 class croniter(object):
     MONTHS_IN_YEAR = 12
     RANGES = (
@@ -146,20 +212,13 @@ class croniter(object):
         """
         Converts a `datetime` object `d` into a UNIX timestamp.
         """
-        if d.tzinfo is not None:
-            d = d.replace(tzinfo=None) - d.utcoffset()
-
-        return cls._timedelta_to_seconds(d - datetime.datetime(1970, 1, 1))
+        return datetime_to_timestamp(d)
 
     def _timestamp_to_datetime(self, timestamp):
         """
         Converts a UNIX timestamp `timestamp` into a `datetime` object.
         """
-        result = datetime.datetime.utcfromtimestamp(timestamp)
-        if self.tzinfo:
-            result = result.replace(tzinfo=tzutc()).astimezone(self.tzinfo)
-
-        return result
+        return timestamp_to_datetime(timestamp, tzinfo=self.tzinfo)
 
     @classmethod
     def _timedelta_to_seconds(cls, td):
@@ -169,8 +228,7 @@ class croniter(object):
         Note: We cannot use `timedelta.total_seconds()` because this is not
         supported by Python 2.6.
         """
-        return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) \
-            / 10**6
+        return timedelta_to_seconds(td)
 
     def _get_next(self, ret_type=None, is_prev=None):
         if is_prev is None:
@@ -201,36 +259,9 @@ class croniter(object):
         else:
             result = self._calc(self.cur, expanded,
                                 nth_weekday_of_month, is_prev)
-
-        # DST Handling for cron job spanning accross days
-        dtstarttime = self._timestamp_to_datetime(self.dst_start_time)
-        dtstarttime_utcoffset = (
-            dtstarttime.utcoffset() or datetime.timedelta(0))
-        dtresult = self._timestamp_to_datetime(result)
-        lag = lag_hours = 0
-        # do we trigger DST on next crontab (handle backward changes)
-        dtresult_utcoffset = dtstarttime_utcoffset
-        if dtresult and self.tzinfo:
-            dtresult_utcoffset = dtresult.utcoffset()
-            lag_hours = (
-                self._timedelta_to_seconds(dtresult - dtstarttime) / (60 * 60)
-            )
-            lag = self._timedelta_to_seconds(
-                dtresult_utcoffset - dtstarttime_utcoffset
-            )
-        hours_before_midnight = 24 - dtstarttime.hour
-        if dtresult_utcoffset != dtstarttime_utcoffset:
-            if (
-                (lag > 0 and abs(lag_hours) >= hours_before_midnight)
-                or (lag < 0 and
-                    ((3600 * abs(lag_hours) + abs(lag)) >= hours_before_midnight * 3600))
-            ):
-                dtresult = dtresult - datetime.timedelta(seconds=lag)
-                result = self._datetime_to_timestamp(dtresult)
-                self.dst_start_time = result
         self.cur = result
         if issubclass(ret_type, datetime.datetime):
-            result = dtresult
+            result = timestamp_to_datetime(self.cur, tzinfo=self.tzinfo)
         return result
 
     # iterator protocol, to enable direct use of croniter
@@ -452,9 +483,56 @@ class croniter(object):
                     month, year = dst.month, dst.year
                     next = True
                     break
+            dst = dst.replace(microsecond=0)
+            # if a DST occurs during the 24 hours between result candidate
+            # and selected original date:
+            # we check if final candidate is occuring during
+            # the one-hour DST transition.
+            # In this case:
+            #  Summer time (+1h delta): 2(-3)h -> 3h
+            #    the algo is NEXTing: we add one hour for candidates between the window
+            #    0 * * * * -> xxxx 0100
+            #    0 * * * * -> xxxx 0300
+            #    0 * * * * -> xxxx 0400
+            #    0 * * * * -> xxxx 0500
+            #    the algo is PREVing: we remove one hour for candidates between the window
+            #    0 * * * * -> xxxx 0400
+            #    0 * * * * -> xxxx 0300
+            #    0 * * * * -> xxxx 0100
+            #    0 * * * * -> xxxx 0000
+            #  Winter time (+1h delta): 2(-3)h -> 1h
+            #    the algo is NEXTing: we add 2 hours
+            #    0 * * * * -> xxxx 0300
+            #    0 * * * * -> xxxx 0600
+            #    0 * * * * -> xxxx 0700
+            #    the algo is PREVing: we remove two hour
+            #    0 * * * * -> xxxx 0300
+            #    0 * * * * -> xxxx 0100
+            #    0 * * * * -> xxxx 0000
+            if dst.tzinfo is not None:
+                curdt = self._timestamp_to_datetime(self.cur)
+                lowb, upb, is_summer = get_next_dst_window(curdt)
+                ohl = dst + relativedelta(hours=1)
+                if lowb is not None:
+                    if (
+                        is_summer and
+                        ((curdt <= lowb and dst > lowb) or
+                         (curdt < lowb and dst >= lowb))
+                    ):
+                        sign = is_prev and -1 or 1
+                        dst += sign * relativedelta(hours=1)
+                        next = False
+                    elif (
+                        not is_summer and
+                        (curdt >= upb) and
+                        (dst < lowb)
+                    ):
+                        sign = is_prev and -1 or 1
+                        dst += sign * relativedelta(hours=1)
+                        next = False
             if next:
                 continue
-            return self._datetime_to_timestamp(dst.replace(microsecond=0))
+            return self._datetime_to_timestamp(dst)
 
         if is_prev:
             raise CroniterBadDateError("failed to find prev date")

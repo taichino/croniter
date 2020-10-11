@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from time import sleep
 import pytz
@@ -11,6 +11,7 @@ from croniter import croniter, croniter_range, CroniterBadDateError, CroniterBad
 from croniter.tests import base
 from tzlocal import get_localzone
 import dateutil.tz
+from dateutil.tz import tzutc
 
 
 class CroniterTest(base.TestCase):
@@ -739,47 +740,57 @@ class CroniterTest(base.TestCase):
         ct = croniter('*/30 * * * *', tz.localize(start))
         self.assertScheduleTimezone(lambda: ct.get_prev(datetime), reversed(expected_schedule))
 
-    def test_std_dst(self):
+    def test_std_dst1(self):
         """
         DST tests
 
         This fixes https://github.com/taichino/croniter/issues/82
 
         """
+        ret = []
+        #
         tz = pytz.timezone('Europe/Warsaw')
-        # -> 2017-03-26 01:59+1:00 -> 03:00+2:00
         local_date = tz.localize(datetime(2017, 3, 26))
         val = croniter('0 0 * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 3, 27)))
+        ret.append(val.isoformat())
         #
         local_date = tz.localize(datetime(2017, 3, 26, 1))
         cr = croniter('0 * * * *', local_date)
         val = cr.get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 3, 26, 3)))
+        ret.append(val.isoformat())
         val = cr.get_current(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 3, 26, 3)))
-
+        ret.append(val.isoformat())
+        self.assertEqual(ret,
+                         ['2017-03-27T01:00:00+02:00',
+                          '2017-03-26T03:00:00+02:00',
+                          '2017-03-26T03:00:00+02:00'])
         # -> 2017-10-29 02:59+2:00 -> 02:00+1:00
+        ret = []
         local_date = tz.localize(datetime(2017, 10, 29))
         val = croniter('0 0 * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 10, 30)))
+        ret.append(val.isoformat())
         local_date = tz.localize(datetime(2017, 10, 29, 1, 59))
         val = croniter('0 * * * *', local_date).get_next(datetime)
-        self.assertEqual(
-            val.replace(tzinfo=None),
-            tz.localize(datetime(2017, 10, 29, 2)).replace(tzinfo=None))
+        ret.append(val.isoformat())
         local_date = tz.localize(datetime(2017, 10, 29, 2))
         val = croniter('0 * * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 10, 29, 3)))
+        ret.append(val.isoformat())
         local_date = tz.localize(datetime(2017, 10, 29, 3))
         val = croniter('0 * * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 10, 29, 4)))
+        ret.append(val.isoformat())
         local_date = tz.localize(datetime(2017, 10, 29, 4))
         val = croniter('0 * * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 10, 29, 5)))
+        ret.append(val.isoformat())
         local_date = tz.localize(datetime(2017, 10, 29, 5))
         val = croniter('0 * * * *', local_date).get_next(datetime)
-        self.assertEqual(val, tz.localize(datetime(2017, 10, 29, 6)))
+        ret.append(val.isoformat())
+        self.assertEqual(ret,
+                         ['2017-10-29T23:00:00+01:00',
+                          '2017-10-29T02:00:00+02:00',
+                          '2017-10-29T03:00:00+01:00',
+                          '2017-10-29T04:00:00+01:00',
+                          '2017-10-29T05:00:00+01:00',
+                          '2017-10-29T06:00:00+01:00'])
 
     def test_std_dst2(self):
         """
@@ -791,6 +802,7 @@ class CroniterTest(base.TestCase):
 
         """
         tz = pytz.timezone("America/Sao_Paulo")
+        # XXX : REvIEWING HERE
         local_dates = [
             # 17-22: 00 -> 18-00:00
             (tz.localize(datetime(2018, 2, 17, 21, 0, 0)),
@@ -821,6 +833,7 @@ class CroniterTest(base.TestCase):
                 for d in local_dates]
         sret1 = ['{0}'.format(d) for d in ret1]
         lret1 = ['{0}'.format(d[1]) for d in local_dates]
+        import pdb;pdb.set_trace()  ## Breakpoint ##
         self.assertEqual(sret1, lret1)
 
     def test_std_dst3(self):
@@ -1159,13 +1172,16 @@ class CroniterRangeTest(base.TestCase):
             list(croniter_range(f_start1, dt_stop1, "0 * * * *"))
 
     def test_timezone_dst(self):
-        """ Test across DST transition, which technially is a timzone change. """
+        """ Test across DST transition, which technially is a timezone change. """
         tz = pytz.timezone("US/Eastern")
+        start = tz.localize(datetime(2020, 11, 1))
+        start = tz.localize(datetime(2020, 10, 31))
         start = tz.localize(datetime(2020, 10, 30))
-        stop =  tz.localize(datetime(2020, 11, 10))
+        stop =  tz.localize(datetime(2020, 11, 5))
         res = list(croniter_range(start, stop, '0 0 * * *'))
         self.assertNotEqual(res[0].tzinfo, res[-1].tzinfo)
-        self.assertEqual(len(res), 12)
+        ret = [r.isoformat() for r in res]
+        self.assertEqual(len(res), 7)
 
     def test_extra_hour_day_prio(self):
         def datetime_tz(*args, **kw):
@@ -1284,6 +1300,79 @@ class CroniterRangeTest(base.TestCase):
         iterable = croniter(cron, start, day_or=False, max_years_between_matches=2).all_prev()
         with self.assertRaises(StopIteration):
             next(iterable)
+
+    def test_issue137_dst20200307_summern(self):
+        # summer time
+        localtz = dateutil.tz.gettz("America/Los_Angeles")
+        start = datetime(2020, 3, 7, 23, 0, tzinfo=localtz)
+        iter = croniter("0 */1 * * *", start)
+        ret1 = []
+        for i in range(7):
+            step = iter.get_next(ret_type=datetime)
+            ret1.append(step.astimezone(tzutc()).isoformat())
+        import pdb;pdb.set_trace()  ## Breakpoint ##
+        self.assertEqual(
+            ret1,
+            ['2020-03-08T08:00:00+00:00',
+             '2020-03-08T10:00:00+00:00',
+             '2020-03-08T11:00:00+00:00',
+             '2020-03-08T12:00:00+00:00',
+             '2020-03-08T13:00:00+00:00',
+             '2020-03-08T14:00:00+00:00',
+             '2020-03-08T15:00:00+00:00'])
+
+    def test_issue137_dst20200307_summerp(self):
+        localtz = dateutil.tz.gettz("America/Los_Angeles")
+        start = datetime(2020, 3, 8, 6, 0, tzinfo=localtz)
+        iter = croniter("0 */1 * * *", start)
+        ret2 = []
+        for i in range(5):
+            step = iter.get_prev(ret_type=datetime)
+            ret2.append(step.astimezone(tzutc()).isoformat())
+        self.assertEqual(
+            ret2,
+            ['2020-03-08T12:00:00+00:00',
+             '2020-03-08T11:00:00+00:00',
+             '2020-03-08T10:00:00+00:00',
+             '2020-03-08T09:00:00+00:00',
+             '2020-03-08T08:00:00+00:00'])
+
+    def test_issue137_dst20200307_wintern(self):
+        # winter time
+        localtz = dateutil.tz.gettz("America/Los_Angeles")
+        start = datetime(2020, 10, 31, 23, 0, tzinfo=localtz)
+        iter = croniter("0 */1 * * *", start)
+        ret1 = []
+        for i in range(5):
+            step = iter.get_next(ret_type=datetime)
+            ret1.append(step.astimezone(tzutc()).isoformat())
+        self.assertEqual(
+            ret1,
+            ['2020-11-01T07:00:00+00:00',
+             '2020-11-01T08:00:00+00:00',
+             '2020-11-01T10:00:00+00:00',
+             '2020-11-01T11:00:00+00:00',
+             '2020-11-01T12:00:00+00:00'])
+
+    def test_issue137_dst20200307_winterp(self):
+        localtz = dateutil.tz.gettz("America/Los_Angeles")
+        start = datetime(2020, 11, 5, 6, 0, tzinfo=localtz)
+        iter = croniter("0 */1 * * *", start)
+        ret2 = []
+        for i in range(9):
+            step = iter.get_prev(ret_type=datetime)
+            ret2.append(step.astimezone(tzutc()).isoformat())
+        self.assertEqual(
+            ret2,
+            ['2020-11-05T13:00:00+00:00',
+              '2020-11-05T12:00:00+00:00',
+              '2020-11-05T11:00:00+00:00',
+              '2020-11-05T10:00:00+00:00',
+              '2020-11-05T09:00:00+00:00',
+              '2020-11-05T08:00:00+00:00',
+              '2020-11-05T07:00:00+00:00',
+              '2020-11-05T06:00:00+00:00',
+              '2020-11-05T05:00:00+00:00'])
 
 
 if __name__ == '__main__':
