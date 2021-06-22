@@ -795,9 +795,6 @@ def croniter_range(start, stop, expr_format, ret_type=None, day_or=True, exclude
     """
     _croniter = _croniter or croniter
     auto_rt = datetime.datetime
-    if type(start) != type(stop):
-        raise TypeError("The start and stop must be same type.  {0} != {1}".
-                        format(type(start), type(stop)))
     if isinstance(start, (float, int)):
         start, stop = (datetime.datetime.utcfromtimestamp(t) for t in (start, stop))
         auto_rt = float
